@@ -2,9 +2,6 @@
 import os
 from dotenv import load_dotenv
 
-# import streamlit
-import streamlit as st
-
 # import langchain
 from langchain.agents import AgentExecutor
 from langchain_chroma import Chroma
@@ -12,7 +9,6 @@ from langchain_ollama import OllamaEmbeddings
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_tool_calling_agent
-from langchain import hub
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 
@@ -20,16 +16,14 @@ load_dotenv()
 
 
 embeddings = OllamaEmbeddings(
-    model=os.getenv("EMBEDDING_MODEL"),         #type: ignore
+    model=os.getenv("EMBEDDING_MODEL"),         # type: ignore
 )
 
-
 vector_store = Chroma(
-    collection_name=os.getenv("COLLECTION_NAME"),           #type: ignore
+    collection_name=os.getenv("COLLECTION_NAME"),           # type: ignore
     embedding_function=embeddings,
     persist_directory=os.getenv("DATABASE_LOCATION"), 
 )
-
 
 llm = init_chat_model(
     os.getenv("CHAT_MODEL"),
@@ -37,8 +31,6 @@ llm = init_chat_model(
     temperature=0
 )
 
-       
-# pulling prompt from hub
 prompt = PromptTemplate.from_template("""                                
 You are a helpful assistant. You will be provided with a query and a chat history.
 Your task is to retrieve relevant information from the vector store and provide a response.
@@ -65,69 +57,46 @@ Answer: Answer of the question
 Source: source_url
 """)
 
-
-# creating the retriever tool
 @tool
 def retrieve(query: str):
     """Retrieve information related to a query."""
     retrieved_docs = vector_store.similarity_search(query, k=2)
 
     serialized = ""
-
     for doc in retrieved_docs:
         serialized += f"Source: {doc.metadata['source']}\nContent: {doc.page_content}\n\n"
 
     return serialized
 
-# combining all tools
 tools = [retrieve]
 
-# initiating the agent
-agent = create_tool_calling_agent(llm, tools, prompt)           #type: ignore
-
-# create the agent executor
+agent = create_tool_calling_agent(llm, tools, prompt)  # type: ignore
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-# initiating streamlit app
-st.set_page_config(page_title="Agentic RAG Chatbot", page_icon="🦜")
-st.title("🦜 Agentic RAG Chatbot")
+# -----------------------------
+# Terminal chat loop
+# -----------------------------
 
-# initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+chat_history = []
 
-# display chat messages from history on app rerun
-for message in st.session_state.messages:
-    if isinstance(message, HumanMessage):
-        with st.chat_message("user"):
-            st.markdown(message.content)
-    elif isinstance(message, AIMessage):
-        with st.chat_message("assistant"):
-            st.markdown(message.content)
+print("Agentic RAG Chatbot")
+print("Type 'exit' or 'quit' to stop.\n")
 
+while True:
+    user_question = input("You: ").strip()
 
-# create the bar where we can type messages
-user_question = st.chat_input("How are you?")
+    if user_question.lower() in {"exit", "quit"}:
+        print("Goodbye 👋")
+        break
 
+    chat_history.append(HumanMessage(user_question))
 
-# did the user submit a prompt?
-if user_question:
-
-    # add the message from the user (prompt) to the screen with streamlit
-    with st.chat_message("user"):
-        st.markdown(user_question)
-
-        st.session_state.messages.append(HumanMessage(user_question))
-
-
-    # invoking the agent
-    result = agent_executor.invoke({"input": user_question, "chat_history":st.session_state.messages})
+    result = agent_executor.invoke({
+        "input": user_question,
+        "chat_history": chat_history
+    })
 
     ai_message = result["output"]
+    print(f"\nAssistant:\n{ai_message}\n")
 
-    # adding the response from the llm to the screen (and chat)
-    with st.chat_message("assistant"):
-        st.markdown(ai_message)
-
-        st.session_state.messages.append(AIMessage(ai_message))
-
+    chat_history.append(AIMessage(ai_message))
