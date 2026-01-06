@@ -1,0 +1,21 @@
+[project]
+name = "docling-faiss"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chroma>=0.2.0",
+    "chromadb>=1.4.0",
+    "docling>=2.66.0",
+    "docling-core>=2.57.0",
+    "dotenv>=0.9.9",
+    "langchain>=1.2.0",
+    "langchain-chroma>=1.1.0",
+    "langchain-community>=0.4.1",
+    "langchain-core>=1.2.6",
+    "langchain-ollama>=1.0.1",
+    "langchain-openai>=1.1.6",
+    "ollama>=0.6.1",
+    "sentence-transformers>=5.2.0",
+]
