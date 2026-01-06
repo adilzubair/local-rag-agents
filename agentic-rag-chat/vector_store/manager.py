@@ -4,7 +4,7 @@ from vector_store.embeddings import EmbeddingModel
 from ingestion.chunking.base import Chunk
 from typing import List
 from dotenv import load_dotenv
-from langchain.schema import Document  # <-- important
+from langchain_core.documents import Document  # <-- important
 
 load_dotenv()
 

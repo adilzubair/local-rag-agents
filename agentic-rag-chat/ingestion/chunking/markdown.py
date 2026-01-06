@@ -11,14 +11,17 @@ class MarkdownChunker(BaseChunker):
         sections = []
         matches = list(HEADER_REGEX.finditer(text))
 
-        for i, match in enumerate(matches):
-            start = match.start()
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        if not matches:
+            sections = [("No Header", text.strip())]
+        else:
+            for i, match in enumerate(matches):
+                start = match.start()
+                end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
 
-            header = match.group(2)
-            section_text = text[start:end].strip()
+                header = match.group(2)
+                section_text = text[start:end].strip()
 
-            sections.append((header, section_text))
+                sections.append((header, section_text))
 
         chunks: list[Chunk] = []
         chunk_id = 0

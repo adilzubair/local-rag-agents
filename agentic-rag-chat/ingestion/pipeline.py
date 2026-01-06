@@ -3,7 +3,7 @@ from ingestion.chunking.factory import get_chunker_and_loader
 from ingestion.metadata.schema import DocumentMetadata
 from hashlib import sha256
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 
 # --- Existing ingestion pipeline ---
 def ingest_file(file_path: Path):
@@ -15,13 +15,17 @@ def ingest_file(file_path: Path):
     text = loader.load(file_path)
     content_hash = sha256(text.encode("utf-8")).hexdigest()
 
-    base_metadata = DocumentMetadata(
+    metadata_obj = DocumentMetadata(
         document_id=str(uuid4()),
         source_path=str(file_path),
         file_type=file_path.suffix.lower(),
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         content_hash=content_hash
-    ).model_dump()
+    )
+    
+    # Convert to dict and handle non-serializable types for Chroma
+    base_metadata = metadata_obj.model_dump()
+    base_metadata["created_at"] = base_metadata["created_at"].isoformat()
 
     chunks = chunker.chunk(text, base_metadata)
     return chunks
