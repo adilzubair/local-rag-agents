@@ -1,22 +1,30 @@
 # import basics
 import os
 from dotenv import load_dotenv
+from dataclasses import dataclass, field
+from typing import List
 
 # import langchain
+from langchain_ollama import ChatOllama
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
+from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 from langchain.messages import HumanMessage, AIMessage, SystemMessage
 
 load_dotenv()  
 
+@dataclass
+class Context:
+    chat_history: List = field(default_factory=list)
+
 
 embeddings = OllamaEmbeddings(
-    model=os.getenv("EMBEDDING_MODEL"),         # type: ignore
+    model=os.getenv("EMBEDDING_MODEL", ""),         # type: ignore
 )
 
 vector_store = Chroma(
@@ -25,35 +33,112 @@ vector_store = Chroma(
     persist_directory=os.getenv("DATABASE_LOCATION"), 
 )
 
-llm = init_chat_model(
-    os.getenv("CHAT_MODEL"),
-    model_provider=os.getenv("MODEL_PROVIDER"),
-    temperature=0
+model = ChatOllama(
+    model="ministral-3:3b",
+    temperature=0,
+    # other params...
 )
 
-@tool
+memory = InMemorySaver()
+
+@tool("retrieve", description="Retrieve relevant documents from the vector store")
 def retrieve(query: str):
-    """Retrieve information related to a query."""
-    retrieved_docs = vector_store.similarity_search(query, k=2)
+    print(f"[DEBUG] retrieve() called with: {query}")
+
+    docs = vector_store.similarity_search(query, k=5)
+
+    if not docs:
+        return "NO_RELEVANT_CONTEXT"
 
     serialized = ""
-    for doc in retrieved_docs:
-        serialized += f"Source: {doc.metadata['source']}\nContent: {doc.page_content}\n\n"
+    for doc in docs:
+        serialized += (
+            f"Source: {doc.metadata.get('source', 'unknown')}\n"
+            f"Content: {doc.page_content}\n\n"
+        )
 
     return serialized
 
 tools = [retrieve]
 
 agent = create_agent(
-    model = 'ministral-3:3b',
-    tools=tools,
-    system_prompt=SystemMessage(
-        content=[
-            {
-                "type": "text",
-                "text": "You are an AI assistant tasked with analyzing literary works.",
-            },
-        ]
-    )
-    
+    model=model,
+    tools=[retrieve],
+    system_prompt="""
+You are a strict RAG-only assistant.
+
+You MUST follow this procedure for EVERY user query:
+
+1. ALWAYS call the `retrieve` tool with the user query.
+2. Read the retrieved content.
+3. Answer using ONLY the retrieved content.
+
+Hard rules:
+- You are NOT allowed to answer without calling `retrieve`.
+- You are NOT allowed to use prior knowledge.
+- If the retrieved content does not contain the answer, reply exactly:
+  "I don't know."
+- Do NOT ask follow-up questions.
+- Do NOT explain your reasoning.
+
+Every factual statement MUST be supported by retrieved content.
+
+Required response format (exact):
+
+Answer: ...
+Source: ...
+""",
+    context_schema=Context,
+    checkpointer=memory,
 )
+
+
+
+
+def run_terminal_chat():
+    print("RAG Agent started. Type 'exit' or 'quit' to stop.\n")
+
+    context = Context(chat_history=[])
+
+    while True:
+        user_input = input("You: ").strip()
+
+        if user_input.lower() in {"exit", "quit"}:
+            print("Exiting...")
+            break
+
+        # Build messages from history
+        messages = context.chat_history + [
+            HumanMessage(content=user_input)
+        ]
+
+        # Invoke agent
+        response = agent.invoke(
+            {
+                "messages": messages
+            },
+            context=context,
+            config={"configurable": {"thread_id": 1}},
+        )
+
+        # Extract AI message
+        ai_message = response["messages"][-1]
+        print(f"\nAI: {ai_message.content}\n")
+
+        # Persist history in context
+        context.chat_history.append(HumanMessage(content=user_input))
+        context.chat_history.append(AIMessage(content=ai_message.content))
+
+
+
+if __name__ == "__main__":
+    print("Vector DB document count:", vector_store._collection.count())
+    
+    docs = vector_store.similarity_search("bitcoin", k=3)
+    print("Retrieved docs:", len(docs))
+    for d in docs:
+        print(d.metadata, d.page_content[:200])
+
+    run_terminal_chat()
+
+

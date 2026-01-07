@@ -23,7 +23,7 @@ VECTOR_DB_DIR = os.getenv("DATABASE_LOCATION")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 
-MAX_TOKENS = 512
+MAX_TOKENS = 256  # smaller chunks to avoid exceeding model context
 TOKENIZER_MODEL = "BAAI/bge-large-en-v1.5"
 
 # ==========================
@@ -54,46 +54,58 @@ chunker = HybridChunker(
 )
 
 # ==========================
-# Ingestion Pipeline
+# Helper functions
 # ==========================
 
 def ingest_file(file_path: Path):
+    """Ingest a single file into Chroma vector DB."""
     print(f"Processing: {file_path}")
 
-    result = converter.convert(str(file_path))
-    doc = result.document
+    try:
+        # Convert document
+        result = converter.convert(str(file_path))
+        doc = result.document
 
-    chunks = chunker.chunk(dl_doc=doc)
+        # Chunk and contextualize
+        chunks = chunker.chunk(dl_doc=doc)
+        documents = []
+        ids = []
 
-    documents = []
-    ids = []
+        for chunk in chunks:
+            text = chunker.contextualize(chunk)
+            if not text.strip():
+                continue  # skip empty chunks
 
-    for chunk in chunks:
-        text = chunker.contextualize(chunk)
+            metadata = {
+                "source": str(file_path),
+                "page": getattr(chunk.meta, "page", None),
+                "section": getattr(chunk.meta, "section_title", None),
+                "doc_type": file_path.suffix,
+            }
 
-        metadata = {
-            "source": str(file_path),
-            "page": getattr(chunk.meta, "page", None),
-            "section": getattr(chunk.meta, "section_title", None),
-            "doc_type": file_path.suffix,
-        }
+            documents.append(Document(page_content=text, metadata=metadata))
+            ids.append(str(uuid4()))
 
-        documents.append(
-            Document(page_content=text, metadata=metadata)
-        )
-        ids.append(str(uuid4()))
+        if documents:
+            vector_store.add_documents(documents=documents, ids=ids)
 
-    vector_store.add_documents(documents=documents, ids=ids)
+    except Exception as e:
+        print(f"Failed to process {file_path}: {e}")
+
+
 
 # ==========================
 # Run Ingestion
 # ==========================
 
 for path in DATASET_FOLDER.rglob("*"):
-    if path.is_file():
-        try:
-            ingest_file(path)
-        except Exception as e:
-            print(f"Failed to process {path}: {e}")
+    if path.is_file() and path.suffix.lower() in {".pdf", ".docx", ".txt", ".md"}:
+        ingest_file(path)
 
+
+
+
+# Sanity check
+doc_count = vector_store._collection.count()
 print("✓ Ingestion complete")
+print(f"Vector DB document count: {doc_count}")
