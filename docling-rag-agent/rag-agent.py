@@ -1,8 +1,7 @@
 # import basics
 import os
 from dotenv import load_dotenv
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
 
 # import langchain
 from langchain_ollama import ChatOllama
@@ -14,33 +13,34 @@ from langchain.agents import create_agent
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
-from langchain.messages import HumanMessage, AIMessage, SystemMessage
 
-load_dotenv()  
+load_dotenv()
 
 @dataclass
 class Context:
-    chat_history: List = field(default_factory=list)
+    pass  # No chat_history anymore
 
-
+# Initialize embeddings and vector store
 embeddings = OllamaEmbeddings(
-    model=os.getenv("EMBEDDING_MODEL", ""),         # type: ignore
+    model=os.getenv("EMBEDDING_MODEL", ""),  # type: ignore
 )
 
 vector_store = Chroma(
-    collection_name=os.getenv("COLLECTION_NAME"),           # type: ignore
+    collection_name=os.getenv("COLLECTION_NAME"),  # type: ignore
     embedding_function=embeddings,
-    persist_directory=os.getenv("DATABASE_LOCATION"), 
+    persist_directory=os.getenv("DATABASE_LOCATION"),
 )
 
+# Initialize model
 model = ChatOllama(
     model="ministral-3:3b",
     temperature=0,
-    # other params...
 )
 
+# Initialize memory (will store context independently)
 memory = InMemorySaver()
 
+# Tool for retrieving docs
 @tool("retrieve", description="Retrieve relevant documents from the vector store")
 def retrieve(query: str):
     print(f"[DEBUG] retrieve() called with: {query}")
@@ -59,8 +59,7 @@ def retrieve(query: str):
 
     return serialized
 
-tools = [retrieve]
-
+# Create agent
 agent = create_agent(
     model=model,
     tools=[retrieve],
@@ -88,17 +87,14 @@ Required response format (exact):
 Answer: ...
 Source: ...
 """,
-    context_schema=Context,
+    # context_schema=Context,
     checkpointer=memory,
 )
 
-
-
-
+# Terminal chat loop (without chat_history)
 def run_terminal_chat():
     print("RAG Agent started. Type 'exit' or 'quit' to stop.\n")
-
-    context = Context(chat_history=[])
+    # context = Context()  # Empty context; memory will manage persistence
 
     while True:
         user_input = input("You: ").strip()
@@ -107,17 +103,10 @@ def run_terminal_chat():
             print("Exiting...")
             break
 
-        # Build messages from history
-        messages = context.chat_history + [
-            HumanMessage(content=user_input)
-        ]
-
-        # Invoke agent
+        # Invoke agent directly without building chat_history
         response = agent.invoke(
-            {
-                "messages": messages
-            },
-            context=context,
+            {"messages": [HumanMessage(content=user_input)]},
+            # context=context,
             config={"configurable": {"thread_id": 1}},
         )
 
@@ -125,20 +114,13 @@ def run_terminal_chat():
         ai_message = response["messages"][-1]
         print(f"\nAI: {ai_message.content}\n")
 
-        # Persist history in context
-        context.chat_history.append(HumanMessage(content=user_input))
-        context.chat_history.append(AIMessage(content=ai_message.content))
-
-
 
 if __name__ == "__main__":
     print("Vector DB document count:", vector_store._collection.count())
-    
+
     docs = vector_store.similarity_search("bitcoin", k=3)
     print("Retrieved docs:", len(docs))
     for d in docs:
         print(d.metadata, d.page_content[:200])
 
     run_terminal_chat()
-
-
