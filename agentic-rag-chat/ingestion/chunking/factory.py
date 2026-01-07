@@ -11,7 +11,11 @@ def get_chunker_and_loader(file_path: Path):
         return PythonCodeChunker(), CodeLoader()
 
     # Document files
-    if suffix in {".md", ".pdf", ".docx", ".txt"}:
+    if suffix == ".txt":
+        from ingestion.loaders.text_loader import TextLoader
+        return MarkdownChunker(), TextLoader()
+
+    if suffix in {".md", ".pdf", ".docx"}:
         from ingestion.loaders.docling_loader import DoclingLoader
         return MarkdownChunker(), DoclingLoader()
 
