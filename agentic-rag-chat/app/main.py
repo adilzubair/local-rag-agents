@@ -44,9 +44,14 @@ except Exception as e:
 class IngestRequest(BaseModel):
     file_path: str
 
+class Message(BaseModel):
+    role: str
+    content: str
+
 class QueryRequest(BaseModel):
     query: str
     k: Optional[int] = 5
+    history: List[Message] = []
 
 class ChunkResponse(BaseModel):
     content: str
@@ -106,7 +111,7 @@ async def query_endpoint(request: QueryRequest):
         # 3. Generate answer using LLM
         answer = "No LLM service available to generate an answer."
         if llm_service:
-            answer = llm_service.generate_response(request.query, docs)
+            answer = llm_service.generate_response(request.query, docs, history=request.history)
             
         return QueryResponse(answer=answer, results=results)
     except Exception as e:
