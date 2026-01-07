@@ -8,7 +8,7 @@ class LLMService:
         self.llm = ChatOllama(model=self.model_name)
         
         self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful AI assistant. Use the provided context to answer the user's question accurately. If the context doesn't contain the answer, say you don't know based on the documents, but try to provide a general answer if appropriate while being clear it's not from the docs."),
+            ("system", "You are a helpful AI assistant. Dont use fetch context for greetings and goodbyes, answer normally. Use the provided context to answer the user's question accurately. If the context doesn't contain the answer, say you don't know based on the documents, Only answer questions that are related to the context"),
             ("user", "Context:\n{context}\n\nQuestion: {query}")
         ])
 
