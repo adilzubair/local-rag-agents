@@ -94,7 +94,6 @@ Source: ...
 # Terminal chat loop (without chat_history)
 def run_terminal_chat():
     print("RAG Agent started. Type 'exit' or 'quit' to stop.\n")
-    # context = Context()  # Empty context; memory will manage persistence
 
     while True:
         user_input = input("You: ").strip()
@@ -103,16 +102,24 @@ def run_terminal_chat():
             print("Exiting...")
             break
 
-        # Invoke agent directly without building chat_history
         response = agent.invoke(
             {"messages": [HumanMessage(content=user_input)]},
-            # context=context,
             config={"configurable": {"thread_id": 1}},
         )
 
-        # Extract AI message
         ai_message = response["messages"][-1]
+
         print(f"\nAI: {ai_message.content}\n")
+
+        # Safely read token usage
+        usage = getattr(ai_message, "usage_metadata", None)
+        if usage:
+            print(
+                f"Tokens | Input: {usage.get('input_tokens', 0)} "
+                f"Output: {usage.get('output_tokens', 0)} "
+                f"Total: {usage.get('total_tokens', 0)}\n"
+            )
+
 
 
 if __name__ == "__main__":
