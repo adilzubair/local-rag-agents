@@ -123,11 +123,11 @@ def run_terminal_chat():
 
 
 if __name__ == "__main__":
-    print("Vector DB document count:", vector_store._collection.count())
+    # print("Vector DB document count:", vector_store._collection.count())
 
-    docs = vector_store.similarity_search("bitcoin", k=3)
-    print("Retrieved docs:", len(docs))
-    for d in docs:
-        print(d.metadata, d.page_content[:200])
+    # docs = vector_store.similarity_search("bitcoin", k=3)
+    # print("Retrieved docs:", len(docs))
+    # for d in docs:
+    #     print(d.metadata, d.page_content[:200])
 
     run_terminal_chat()
